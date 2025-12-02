@@ -1,0 +1,144 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background-color: #f0f2f5;
+    color: #1a1a1a;
+    margin: 0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+header {
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+h1 {
+    margin: 0;
+    color: #2c3e50;
+}
+
+.meta {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+}
+
+.card {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+h2 {
+    margin-top: 0;
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 12px;
+    font-size: 1.2rem;
+}
+
+.stat-row {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+}
+
+.label {
+    font-size: 0.8rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #0066cc;
+}
+
+.value-small {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #27ae60; /* Зеленый для прогноза */
+}
+
+.prediction {
+    background-color: #f8fdf9;
+    border: 1px solid #e3f5e6;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    text-align: left;
+    padding: 12px 8px;
+    border-bottom: 1px solid #eee;
+}
+
+th {
+    color: #666;
+    font-weight: 500;
+}
+
+/* Chart Styles */
+.chart-container {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.chart-label {
+    font-size: 0.8rem;
+    color: #888;
+    margin-bottom: 8px;
+    text-align: right;
+}
+
+.chart-svg {
+    width: 100%;
+    height: 100px; /* Fixed height for the chart */
+    background-color: #fafafa;
+    border-radius: 4px;
+    border: 1px solid #eee;
+}
+
+/* Error banner styles */
+.error-banner {
+    background-color: #fee;
+    border: 1px solid #fcc;
+    color: #c33;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-weight: 500;
+}
