@@ -1,0 +1,10 @@
+# Rust build artifacts
+target/
+**/*.rs.bk
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# UI Emulation temp files if any
+ui-emulation/target/
