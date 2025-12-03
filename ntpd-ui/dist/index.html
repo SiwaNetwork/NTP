@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Монитор NTP</title>
+    <style>
+        body { 
+            font-family: monospace; 
+            margin: 0; 
+            padding: 20px; 
+            background: linear-gradient(to bottom right, #e3f2fd, #f3e5f5);
+            min-height: 100vh;
+            color: #000; 
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 { font-size: 20px; margin-bottom: 10px; color: #1976d2; }
+        h2 { font-size: 16px; margin-top: 20px; margin-bottom: 10px; color: #424242; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #e3f2fd; font-weight: bold; }
+        tr:nth-child(even) { background: #fafafa; }
+        .status { margin-bottom: 20px; }
+        #last-update { font-size: 12px; color: #666; margin-bottom: 15px; }
+        .chart-container { margin-top: 15px; padding: 15px; background: #fafafa; border-radius: 8px; }
+        .chart-label { font-size: 12px; color: #666; margin-bottom: 8px; text-align: center; }
+        #chart { width: 100%; height: 150px; }
+        .prediction { margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 14px; }
+        .prediction strong { color: #856404; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Монитор синхронизации времени NTP</h1>
+        <div id="last-update">Загрузка...</div>
+        
+        <div class="status">
+            <h2>Системные данные</h2>
+            <table>
+                <tr><th>Параметр</th><th>Значение</th></tr>
+                <tr><td>Версия</td><td id="version">-</td></tr>
+                <tr><td>Время работы</td><td id="uptime">-</td></tr>
+                <tr><td>Уровень (Stratum)</td><td id="stratum">-</td></tr>
+                <tr><td>Смещение (Offset)</td><td id="offset">-</td></tr>
+                <tr><td>Задержка корня (Root Delay)</td><td id="delay">-</td></tr>
+                <tr><td>Дисперсия (Dispersion)</td><td id="dispersion">-</td></tr>
+                <tr><td>Джиттер (Jitter)</td><td id="jitter">-</td></tr>
+                <tr><td>Точность (Precision)</td><td id="precision">-</td></tr>
+                <tr><td>Индикатор високоса (Leap)</td><td id="leap">-</td></tr>
+            </table>
+            
+            <div id="prediction-box" class="prediction" style="display: none;">
+                <strong>Прогноз ухода часов через 1 час:</strong> <span id="prediction">-</span>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-label">График смещения времени (последние 60 измерений)</div>
+                <svg id="chart" viewBox="0 0 600 150"></svg>
+            </div>
+        </div>
+        
+        <div>
+            <h2>Источники времени (<span id="count">0</span>)</h2>
+            <div id="sources">Загрузка...</div>
+        </div>
+    </div>
+
+    <script>
+        let offsetHistory = [];
+        
+        // Линейная регрессия методом наименьших квадратов
+        function linearRegression(y) {
+            const n = y.length;
+            if (n < 2) return null;
+            
+            let sum_x = 0, sum_y = 0, sum_xy = 0, sum_xx = 0;
+            
+            for (let i = 0; i < n; i++) {
+                sum_x += i;
+                sum_y += y[i];
+                sum_xy += i * y[i];
+                sum_xx += i * i;
+            }
+            
+            const slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x);
+            const intercept = (sum_y - slope * sum_x) / n;
+            
+            return { slope, intercept };
+        }
+        
+        // Расчет jitter (стандартное отклонение)
+        function calculateJitter(data) {
+            if (data.length < 2) return null;
+            
+            const mean = data.reduce((a, b) => a + b, 0) / data.length;
+            const variance = data.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / data.length;
+            
+            return Math.sqrt(variance);
+        }
+        
+        function drawChart() {
+            if (offsetHistory.length === 0) return;
+            
+            const svg = document.getElementById('chart');
+            const width = 600;
+            const height = 150;
+            const padding = 20;
+            
+            // Находим мин/макс для масштабирования
+            const values = offsetHistory.map(v => v * 1000); // В миллисекундах
+            const maxVal = Math.max(...values.map(Math.abs), 0.001);
+            
+            // Очищаем SVG
+            svg.innerHTML = '';
+            
+            // Рисуем оси
+            const centerY = height / 2;
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', padding);
+            line.setAttribute('y1', centerY);
+            line.setAttribute('x2', width - padding);
+            line.setAttribute('y2', centerY);
+            line.setAttribute('stroke', '#ccc');
+            line.setAttribute('stroke-width', '1');
+            svg.appendChild(line);
+            
+            // Рисуем график
+            if (values.length > 1) {
+                const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+                const points = values.map((val, i) => {
+                    const x = padding + (i / (values.length - 1)) * (width - 2 * padding);
+                    const y = centerY - (val / maxVal) * (centerY - padding);
+                    return `${x},${y}`;
+                }).join(' ');
+                
+                polyline.setAttribute('points', points);
+                polyline.setAttribute('fill', 'none');
+                polyline.setAttribute('stroke', '#1976d2');
+                polyline.setAttribute('stroke-width', '2');
+                svg.appendChild(polyline);
+            }
+            
+            // Подписи
+            const maxLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            maxLabel.setAttribute('x', '5');
+            maxLabel.setAttribute('y', '15');
+            maxLabel.setAttribute('font-size', '10');
+            maxLabel.setAttribute('fill', '#666');
+            maxLabel.textContent = '+' + maxVal.toFixed(2) + ' мс';
+            svg.appendChild(maxLabel);
+            
+            const minLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            minLabel.setAttribute('x', '5');
+            minLabel.setAttribute('y', height - 5);
+            minLabel.setAttribute('font-size', '10');
+            minLabel.setAttribute('fill', '#666');
+            minLabel.textContent = '-' + maxVal.toFixed(2) + ' мс';
+            svg.appendChild(minLabel);
+        }
+        
+        async function update() {
+            try {
+                const r = await fetch('/api/status');
+                const d = await r.json();
+                
+                document.getElementById('version').textContent = d.program.version || '-';
+                document.getElementById('uptime').textContent = d.program.uptime_seconds.toFixed(0) + ' сек';
+                document.getElementById('stratum').textContent = d.system.stratum || '-';
+                document.getElementById('offset').textContent = (d.system.root_delay * 1000).toFixed(3) + ' мс';
+                document.getElementById('delay').textContent = (d.system.root_delay * 1000).toFixed(3) + ' мс';
+                document.getElementById('precision').textContent = (d.system.precision * 1000000).toFixed(1) + ' мкс';
+                document.getElementById('leap').textContent = d.system.leap_indicator || '-';
+                
+                // Добавляем в историю для графика
+                offsetHistory.push(d.system.root_delay || 0);
+                if (offsetHistory.length > 60) offsetHistory.shift();
+                drawChart();
+                
+                // Расчет jitter
+                if (offsetHistory.length >= 2) {
+                    const jitter = calculateJitter(offsetHistory);
+                    document.getElementById('jitter').textContent = (jitter * 1000).toFixed(3) + ' мс';
+                    
+                    // Расчет дисперсии (используем jitter как оценку)
+                    document.getElementById('dispersion').textContent = (jitter * 1000).toFixed(3) + ' мс';
+                } else {
+                    document.getElementById('jitter').textContent = '-';
+                    document.getElementById('dispersion').textContent = '-';
+                }
+                
+                // Прогноз ухода часов через 1 час (линейная регрессия)
+                if (offsetHistory.length >= 10) {
+                    const regression = linearRegression(offsetHistory);
+                    if (regression) {
+                        // slope - изменение в секунду (данные приходят каждые 2 сек, но считаем по индексу)
+                        // Прогноз через 1 час = текущее значение + slope * 1800 (1800 точек за час при обновлении каждые 2 сек)
+                        const current = offsetHistory[offsetHistory.length - 1];
+                        const prediction_1h = current + regression.slope * 1800;
+                        
+                        document.getElementById('prediction').textContent = 
+                            (prediction_1h * 1000).toFixed(2) + ' мс (' + 
+                            (regression.slope > 0 ? '+' : '') + (regression.slope * 1000 * 3600).toFixed(3) + ' мс/час)';
+                        document.getElementById('prediction-box').style.display = 'block';
+                    }
+                } else {
+                    document.getElementById('prediction-box').style.display = 'none';
+                }
+                
+                document.getElementById('count').textContent = d.sources.length;
+                
+                let html = '<table><tr><th>Адрес</th><th>Смещение (мс)</th><th>Неопределённость (мс)</th><th>Задержка (мс)</th></tr>';
+                d.sources.forEach(s => {
+                    html += '<tr>';
+                    html += '<td>' + (s.address || '-') + '</td>';
+                    html += '<td>' + (s.offset * 1000).toFixed(3) + '</td>';
+                    html += '<td>' + (s.uncertainty * 1000).toFixed(3) + '</td>';
+                    html += '<td>' + (s.delay * 1000).toFixed(3) + '</td>';
+                    html += '</tr>';
+                });
+                html += '</table>';
+                document.getElementById('sources').innerHTML = html;
+                
+                document.getElementById('last-update').textContent = 'Обновлено: ' + new Date().toLocaleTimeString();
+            } catch(e) {
+                document.getElementById('last-update').textContent = 'Ошибка: ' + e.message;
+            }
+        }
+        
+        update();
+        setInterval(update, 2000);
+    </script>
+</body>
+</html>
