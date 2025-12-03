@@ -172,14 +172,25 @@
                 
                 document.getElementById('version').textContent = d.program.version || '-';
                 document.getElementById('uptime').textContent = d.program.uptime_seconds.toFixed(0) + ' сек';
+                // Определяем системное смещение (Offset)
+                // Берем источник с наименьшей неопределенностью (uncertainty)
+                let currentOffset = 0;
+                
+                if (d.sources.length > 0) {
+                    // Сортируем по качеству (меньше uncertainty - лучше)
+                    let sortedSources = [...d.sources].sort((a, b) => a.uncertainty - b.uncertainty);
+                    // Берем лучший источник
+                    currentOffset = sortedSources[0].offset;
+                }
+                
                 document.getElementById('stratum').textContent = d.system.stratum || '-';
-                document.getElementById('offset').textContent = (d.system.root_delay * 1000).toFixed(3) + ' мс';
+                document.getElementById('offset').textContent = (currentOffset * 1000).toFixed(3) + ' мс';
                 document.getElementById('delay').textContent = (d.system.root_delay * 1000).toFixed(3) + ' мс';
                 document.getElementById('precision').textContent = (d.system.precision * 1000000).toFixed(1) + ' мкс';
                 document.getElementById('leap').textContent = d.system.leap_indicator || '-';
                 
-                // Добавляем в историю для графика
-                offsetHistory.push(d.system.root_delay || 0);
+                // Добавляем в историю для графика (используем реальное смещение)
+                offsetHistory.push(currentOffset || 0);
                 if (offsetHistory.length > 60) offsetHistory.shift();
                 drawChart();
                 
