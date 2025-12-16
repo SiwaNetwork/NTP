@@ -13,6 +13,7 @@ use axum::{
     Router,
 };
 use ntpd::daemon::{sockets::read_json, ObservableState};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::net::UnixStream;
 use tower_http::{
@@ -42,12 +43,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("/run/ntpd-rs/observe"));
 
-    let state = AppState { socket_path };
+    let state = AppState { socket_path: socket_path.clone() };
 
     // Настраиваем маршруты
     let app = Router::new()
         .route("/api/status", get(get_status))
-        .nest_service("/", ServeDir::new("dist"))  // статические файлы
+        .nest_service("/", ServeDir::new("ntpd-ui/dist"))  // статические файлы
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -55,8 +56,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
     let port = std::env::var("PORT")
         .unwrap_or_else(|_| "3000".into())
-        .parse::<u16>()?;
-    let addr = format!("{}:{}", host, port).parse()?;
+        .parse::<u16>()
+        .map_err(|e| format!("Invalid PORT: {}", e))?;
+    let addr: SocketAddr = format!("{}:{}", host, port).parse()
+        .map_err(|e| format!("Invalid address {}:{}: {}", host, port, e))?;
 
     tracing::info!("🚀 NTP UI Server запущен на http://{}", addr);
     tracing::info!("📡 Подключение к демону через: {:?}", socket_path);
